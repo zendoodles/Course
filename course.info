@@ -1,0 +1,12 @@
+name = Course
+core = 7.x
+description = Courses for a Drupal based Learning Management System
+
+dependencies[] = entity
+
+files[] = course.module
+files[] = course.install
+files[] = includes/course.class.php
+files[] = tests/course.test
+
+configure = admin/config/course

@@ -1,0 +1,69 @@
+Course 7.x-2.x proposal
+=======================
+
+Summary
+-------
+Rewrite Course module to use the fieldable Entity layer, allowing full support of Features, Rules and Views out of the box.
+
+Structure
+---------
+Course is a new Entity.
+
+Course bundles are instances of the Course Entity, containing Course settings and Course Field instances. These bundles are reuseable templates for creating individual Courses.
+
+Course Field types are only attachable to (and are the only attachable Field types for) Course bundles. Each Field type module may enable creation and referencing of Course material, integrate with other learning applications, and provide grading and other Field data to Rules and Views. A Course bundle's Field instances comprise the Course outline, and each Field controls their step in the outline. When configuring both a Course bundle settings and it's Field instance settings, available Rules may be selected to control access, workflow and requirements for interacting with Courses.
+
+@see http://drupal.org/project/fse for a good example of how Webform was refactored to be fieldable as a new project.
+
+Modules
+-------
+course.module
+Create Courses as Entities.
+
+course.field.inc
+Build Course Entities with Course Field types intended for use only with Courses.
+
+course_reference.module
+Use this Course Field type to reference other Courses as steps within a Course outline. Extends Entity reference for Courses.
+
+(Other Course Field type modules include: course_book, course_certificate, course_media, course_poll, course_quiz, course_reminder, course_scorm, course_webform).
+
+course_rules.module
+Create reusable Rules for taking Courses, configurable per course.
+
+course.features.inc
+Export Course Entities, Fields and Rules as reuseable templates (feature support for course.module).
+
+course_example.module
+An example Course template. Includes example Rules for Course access, workflow and requirements. Includes example Views for Course catalog, progress and report. Includes useful roles and permissions (with Workbench moderation states) for a basic e-learning workflow.
+
+Installation
+------------
+1. Install and enable Course module.
+2. Enable the included Course example module and it's dependencies (advanced users may skip this step).
+
+Managing Courses
+----------------
+1. View the list of Course templates (bundles) at admin/structure/course.
+2. Optionally modify a template at admin/structure/course/manage/BUNDLE_NAME. Or add a new one at admin/structure/course/add.
+3. Create a Course at course/add/BUNDLE_NAME.
+4. Add steps to the Course workflow by selecting from the available Course Fields. Each Field will guide you through the configuration of it's step in the workflow. Rules for workflow and requirements for each Field may be selected when configuring the Field settings.
+5. Optionally adjust the Course's Settings. Rules for access, workflow and requirements for the entire Course may be selected when configuring the Course settings.
+6. Users may now take the Course, which will be listed at course/catalog.
+7. Manage all students at admin/people/course; students for specific Courses at course/%course/progress; and find all of a student's Courses at user/%user/course.
+8. View Course reports for all Courses at admin/reports/course; for specific Courses at course/%course/report; for all of a student's Courses at user/%user/course/report; and for a student for a specific course at user/%user/course/report/%course.
+
+
+Field Widget
+------------
+Rather than limiting the fields available to Course bundles, maybe we should just provide a Course "component" field type, and let the various component type field modules provide additional widgets. That way additional fields (and functionality from them) can still be added to the Course bundle.
+
+Rules
+-----
+About removing the cruft… (all our various sometimes conflicting logic) i was thinking Rules could be just the thing. I'd kind of like to save that one till last though, because it feels like it might require the most custom interface - mainly, an easy way to only activate each Course Rule on the Courses which select them in the Course settings.
+
+I also now think maybe Rules should not be selectable on the field-level. I'm actually on the fence about this, but it may be just easier to encourage giving the Rules easily grokkable titles, and select (enable) them all in one place (the most logical place i can think of is the settings per course).
+
+Super-quick example of functionality is course admins make a Rule that "Pre test (field_pre_test) and Standards quiz completion (field_standards_quiz) are required to take Post test (field_post_test), but only for students that already completed 5 Courses". This Rule could then be selectable (activated) in the Course settings. Sort of like a more robust (and re-useable, or cloneable, and extendable) solution for the various places where we now have logic (and flags for that logic stored in our tables).
+
+

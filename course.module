@@ -1,0 +1,49 @@
+<?php
+/**
+ * @file course.module
+ * A module that provides course entities for a Drupal based learning management system.
+ */
+
+/**
+ * Implements hook_help().
+ * @param $path
+ * @param $arg
+ * @return string
+ */
+function course_help($path, $arg) {
+  switch ($path) {
+  case "admin/help#course":
+    return '<p>' . t('Provides course entities for a Drupal based learning management system.') . '</p>';
+  }
+}
+
+/**
+ * Implements hook_menu().
+ * @return array
+ */
+function course_menu() {
+  $items = array();
+
+   $items['admin/config/course'] = array(
+    'title' => 'Course',
+    'description' => 'Configuration for Course module',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('course_config_form'),
+    'access arguments' => array('access administration pages'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+function course_config_form($form, &$form_state) {
+  $form['course_config_placeholder'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Configuration Placeholder'),
+    '#default_value' => variable_get('course_config_placeholder', "Default text for the course config placeholder"),
+    '#description' => t('A placeholder for configuration options which will undoubtedly be added soon.'),
+    '#required' => FALSE,
+  );
+
+  return system_settings_form($form);
+}
