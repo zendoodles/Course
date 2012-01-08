@@ -47,3 +47,444 @@ function course_config_form($form, &$form_state) {
 
   return system_settings_form($form);
 }
+
+/**
+ * Implements hook_entity_info().
+ */
+function course_entity_info() {
+  $return = array(
+    'course' => array(
+      'label' => t('Course'),
+      'plural label' => t('Courses'),
+      'description' => t('Course entities for a Drupal based learning management system'),
+      'entity class' => 'Course',
+      'controller class' => 'EntityAPIController',
+      'base table' => 'course',
+      'fieldable' => TRUE,
+      'view modes' => array(),
+      'entity keys' => array(
+        'id' => 'course_id',
+        'bundle' => 'type',
+        'label' => 'label',
+      ),
+      'bundles' => array(),
+      'bundle keys' => array(
+        'bundle' => 'type',
+      ),
+      'uri callback' => 'entity_class_uri',
+      'access callback' => 'course_access',
+      'module' => 'course',
+      'metadata controller class' => 'courseMetadataController'
+    ),
+  );
+
+  // Add bundle info but bypass entity_load() as we cannot use it here.
+  $types = db_select('course_type', 'p')
+    ->fields('p')
+    ->execute()
+    ->fetchAllAssoc('type');
+
+  foreach ($types as $type => $info) {
+    $return['course']['bundles'][$type] = array(
+      'label' => $info->label,
+      'admin' => array(
+        'path' => 'admin/structure/courses/manage/%course_type',
+        'real path' => 'admin/structure/courses/manage/' . $type,
+        'bundle argument' => 4,
+        'access arguments' => array('administer courses'),
+      ),
+    );
+  }
+
+  // Support entity cache module.
+  if (module_exists('entitycache')) {
+    $return['course']['field cache'] = FALSE;
+    $return['course']['entity cache'] = TRUE;
+  }
+
+  $return['course_type'] = array(
+    'label' => t('Course type'),
+    'plural label' => t('Course types'),
+    'entity class' => 'CourseType',
+    'controller class' => 'EntityAPIControllerExportable',
+    'base table' => 'course_type',
+    'fieldable' => FALSE,
+    'bundle of' => 'course',
+    'exportable' => TRUE,
+    'entity keys' => array(
+      'id' => 'id',
+      'name' => 'type',
+      'label' => 'label',
+    ),
+    'access callback' => 'course_type_access',
+    'module' => 'course',
+    // Enable the entity API's admin UI.
+    'admin ui' => array(
+      'path' => 'admin/structure/courses',
+      'file' => 'course.admin.inc',
+      'controller class' => 'courseTypeUIController',
+    ),
+  );
+
+  return $return;
+}
+
+/**
+ * Menu argument loader; Load a course type by string.
+ *
+ * @param $type
+ *   The machine-readable name of a course type to load.
+ * @return
+ *   A course type array or FALSE if $type does not exist.
+ */
+function course_type_load($type) {
+  return course_get_types($type);
+}
+
+/**
+ * Implements hook_permission().
+ */
+function course_permission() {
+  $permissions = array(
+    'administer course types' =>  array(
+      'title' => t('Administer course types'),
+      'description' => t('Create and delete fields on courses, and set their permissions.'),
+    ),
+    'administer courses' =>  array(
+      'title' => t('Administer courses'),
+      'description' => t('Edit and view all courses.'),
+    ),
+  );
+  // Generate per course type permissions.
+  foreach (course_get_types() as $type) {
+    $type_name = check_plain($type->type);
+    $permissions += array(
+      "edit own $type_name course" => array(
+        'title' => t('%type_name: Edit own course', array('%type_name' => $type->label)),
+      ),
+      "edit any $type_name course" => array(
+        'title' => t('%type_name: Edit any course', array('%type_name' => $type->label)),
+      ),
+      "view own $type_name course" => array(
+        'title' => t('%type_name: View own course', array('%type_name' => $type->label)),
+      ),
+      "view any $type_name course" => array(
+        'title' => t('%type_name: View any course', array('%type_name' => $type->label)),
+      ),
+    );
+  }
+  return $permissions;
+}
+
+/**
+ * Gets an array of all course types, keyed by the type name.
+ *
+ * @param $type_name
+ *   If set, the type with the given name is returned.
+ * @return CourseType[]
+ *   Depending whether $type isset, an array of course types or a single one.
+ */
+function course_get_types($type_name = NULL) {
+  $types = entity_load_multiple_by_name('course_type', isset($type_name) ? array($type_name) : FALSE);
+  return isset($type_name) ? reset($types) : $types;
+}
+
+/**
+ * Fetch a course object.
+ *
+ * @param $course_id
+ *   Integer specifying the course id.
+ * @param $reset
+ *   A boolean indicating that the internal cache should be reset.
+ * @return
+ *   A fully-loaded $course object or FALSE if it cannot be loaded.
+ *
+ * @see course_load_multiple()
+ */
+function course_load($course_id, $reset = FALSE) {
+  $courses = course_load_multiple(array($course_id), array(), $reset);
+  return reset($courses);
+}
+
+/**
+ * Load multiple courses based on certain conditions.
+ *
+ * @param $course_ids
+ *   An array of course IDs.
+ * @param $conditions
+ *   An array of conditions to match against the {course} table.
+ * @param $reset
+ *   A boolean indicating that the internal cache should be reset.
+ * @return
+ *   An array of course objects, indexed by course_id.
+ *
+ * @see entity_load()
+ * @see course_load()
+ */
+function course_load_multiple($course_ids = array(), $conditions = array(), $reset = FALSE) {
+  return entity_load('course', $course_ids, $conditions, $reset);
+}
+
+/**
+ * Implements hook_course_delete().
+ */
+function course_course_delete($course) {
+  // Clear the static cache from course_load().
+  $cache = &drupal_static('course_load', array());
+  unset($cache[$course->type]);
+}
+
+/**
+ * Deletes a course.
+ */
+function course_delete(Course $course) {
+  $course->delete();
+}
+
+/**
+ * Delete multiple courses.
+ *
+ * @param $course_ids
+ *   An array of course IDs.
+ */
+function course_delete_multiple(array $course_ids) {
+  entity_get_controller('course')->delete($course_ids);
+}
+
+/**
+ * Create a new course object.
+ */
+function course_create(array $values) {
+  return new Course($values);
+}
+
+
+/**
+ * Saves a course to the database.
+ *
+ * @param $course
+ *   The course object.
+ */
+function course_save(Course $course) {
+  return $course->save();
+}
+
+/**
+ * Saves a course type to the db.
+ */
+function course_type_save(CourseType $type) {
+  $type->save();
+}
+
+/**
+ * Deletes a course type from.
+ */
+function course_type_delete(CourseType $type) {
+  $type->delete();
+}
+
+/**
+ * Implements hook_course_type_insert().
+ */
+function course_course_type_insert(CourseType $type) {
+  // Always rebuild the menu in case a course type is inserted or changed, as
+  // also extension modules like course page might need menu rebuilds. In
+  // order to avoid possible multiple rebuilds of modules we just do it always
+  // but once here.
+  menu_rebuild();
+}
+
+/**
+ * Implements hook_course_type_update().
+ */
+function course_course_type_update(CourseType $type) {
+  // @see course_course_type_insert()
+  menu_rebuild();
+}
+
+/**
+* Implements hook_course_type_delete()
+*/
+function course_course_type_delete($type) {
+  // Delete all courses of this type.
+  if ($course_ids = array_keys(course_load_multiple(FALSE, array('type' => $type->type)))) {
+    course_delete_multiple($course_ids);
+  }
+  // @see course_course_type_insert()
+  menu_rebuild();
+}
+
+/**
+ * Attaches the course forms of the courses set in
+ * $form_state['courses'].
+ *
+ * Modules may alter the course entity form regardless to which form it is
+ * attached by making use of hook_form_course_form_alter().
+ *
+ * @param $form
+ *   The form to which to attach the course form. For each course the form
+ *   is added to @code $form['course_' . $course->type] @endcode. This helper
+ *   also adds in a validation and a submit handler caring for the attached
+ *   course forms.
+ *
+ * @see hook_form_course_form_alter()
+ * @see course_form_validate_handler()
+ * @see course_form_submit_handler()
+ */
+function course_attach_form(&$form, &$form_state) {
+  foreach ($form_state['courses'] as $type => $course) {
+    $form['course_' . $course->type]['#tree'] = TRUE;
+    $form['course_' . $course->type]['#parents'] = array('course_' . $course->type);
+    field_attach_form('course', $course, $form['course_' . $course->type], $form_state);
+
+    if (count(field_info_instances('course', $course->type)) == 0) {
+      $form['course_' . $course->type]['message'] = array(
+        '#access' => user_access('administer course types'),
+        '#markup' => t('No fields have been associated with this course type. Go to the <a href="!url">Course types</a> page to add some fields.', array('!url' => url('admin/structure/courses'))),
+      );
+    }
+
+    // Provide a central place for modules to alter the course forms, but
+    // skip that in case the caller cares about invoking the hooks.
+    // @see course_form().
+    if (!isset($form_state['course_skip_hook'])) {
+      $hooks[] = 'form_course_edit_' . $type . '_form';
+      $hooks[] = 'form_course_form';
+      drupal_alter($hooks, $form, $form_state);
+    }
+  }
+  $form['#validate'][] = 'course_form_validate_handler';
+  $form['#submit'][] = 'course_form_submit_handler';
+}
+
+/**
+ * Validation handler for the course form.
+ *
+ * @see course_attach_form()
+ */
+function course_form_validate_handler(&$form, &$form_state) {
+  foreach ($form_state['courses'] as $type => $course) {
+    if (isset($form_state['values']['course_' . $course->type])) {
+      // @see entity_form_field_validate()
+      $pseudo_entity = (object) $form_state['values']['course_' . $course->type];
+      $pseudo_entity->type = $type;
+      field_attach_form_validate('course', $pseudo_entity, $form['course_' . $course->type], $form_state);
+    }
+  }
+}
+
+/**
+ * Submit handler that builds and saves all courses in the form.
+ *
+ * @see course_attach_form()
+ */
+function course_form_submit_handler(&$form, &$form_state) {
+  foreach ($form_state['courses'] as $type => $course) {
+    course_save($course);
+  }
+}
+
+/**
+ * Submit builder. Extracts the form values and updates the course entities.
+ *
+ * @see course_attach_form()
+ */
+function course_form_submit_build_course(&$form, &$form_state) {
+  foreach ($form_state['courses'] as $type => $course) {
+    // @see entity_form_submit_build_entity()
+    if (isset($form['course_' . $type]['#entity_builders'])) {
+      foreach ($form['course_' . $type]['#entity_builders'] as $function) {
+        call_user_func($function, 'course', $course, $form['course_' . $type], $form_state);
+      }
+    }
+    field_attach_submit('course', $course, $form['course_' . $type], $form_state);
+  }
+}
+
+/**
+ * Menu item access callback - check if a user has access to a course category.
+ */
+function course_category_access($account, $type_name) {
+  // As there might be no course yet, create a new object for being able to run
+  // a proper access check.
+  $course = course_create(array('type' => $type_name));
+  return (course_access('edit', $course));
+}
+
+/**
+ * Determines whether the given user has access to a course.
+ *
+ * @param $op
+ *   The operation being performed. One of 'view', 'update', 'create', 'delete'
+ *   or just 'edit' (being the same as 'create' or 'update').
+ * @param $course
+ *   (optional) A course to check access for. If nothing is given, access for
+ *   all courses is determined.
+ * @param $account
+ *   The user to check for. Leave it to NULL to check for the global user.
+ * @return boolean
+ *   Whether access is allowed or not.
+ *
+ * @see hook_course_access()
+ * @see course_course_access()
+ */
+function course_access($op, $course = NULL, $account = NULL) {
+  if (user_access('administer courses', $account)) {
+    return TRUE;
+  }
+  if ($op == 'create' || $op == 'update') {
+    $op = 'edit';
+  }
+  // Allow modules to grant / deny access.
+  $access = module_invoke_all('course_access', $op, $course, $account);
+
+  // Only grant access if at least one module granted access and no one denied
+  // access.
+  if (in_array(FALSE, $access, TRUE)) {
+    return FALSE;
+  }
+  elseif (in_array(TRUE, $access, TRUE)) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Implements hook_course_access().
+ * @todo Implement this!!
+ */
+function course_course_access($op, $course = NULL, $account = NULL) {
+
+  return TRUE;
+}
+
+/**
+ * Access callback for the entity API.
+ */
+function course_type_access($op, $type = NULL, $account = NULL) {
+  return user_access('administer course types', $account);
+}
+
+/**
+ * Implements hook_theme().
+ */
+function course_theme() {
+  return array(
+    'course_admin_type' => array(
+      'variables' => array('label' => NULL, 'type' => NULL),
+    ),
+    'course' => array(
+      'render element' => 'elements',
+      'template' => 'course',
+    ),
+  );
+}
+
+/**
+ * Entity metadata callback to load courses.
+ */
+function course_get_properties($account, array $options, $name) {
+  // Remove the leading 'course_' from the property name to get the type name.
+  $course = course_load(substr($name, 8));
+  return $course ? $course : NULL;
+}

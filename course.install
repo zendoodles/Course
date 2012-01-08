@@ -1,0 +1,121 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the course module.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function course_install() {
+  // Add an initial course type, but only if installed manually. In case the
+  // module is installed via an installation course, skip that.
+  if (!drupal_installation_attempted()) {
+    $type = entity_create('course_type', array(
+      'type' => 'base',
+      'label' => t('Base course type'),
+      'weight' => 0,
+    ));
+    $type->save();
+    user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array('edit own base course', 'view own base course'));
+    drupal_set_message(t('A base course type has been created. Go to the <a href="!url">Course types</a> page to add some fields or to configure further course types.', array('!url' => url('admin/structure/courses'))));
+  }
+}
+
+/**
+ * Implements hook_schema().
+ */
+function course_schema() {
+  $schema['course'] = array(
+    'description' => 'Stores course items.',
+    'fields' => array(
+      'course_id' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique course item ID.',
+      ),
+      'type' => array(
+        'description' => 'The {course_type}.type of this course.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'label' => array(
+        'description' => 'A human-readable label for this course.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'created' => array(
+        'description' => 'The Unix timestamp when the course was created.',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+      'changed' => array(
+        'description' => 'The Unix timestamp when the course was most recently saved.',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+    ),
+    'indexes' => array(), // @todo add indexes.
+
+    'primary key' => array('course_id'),
+  );
+
+  $schema['course_type'] = array(
+    'description' => 'Stores information about all defined course types.',
+    'fields' => array(
+      'id' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique course type ID.',
+      ),
+      'type' => array(
+        'description' => 'The machine-readable name of this course type.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+      ),
+      'label' => array(
+        'description' => 'The human-readable name of this course type.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'weight' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'size' => 'tiny',
+        'description' => 'The weight of this course type in relation to others.',
+      ),
+      'data' => array(
+        'type' => 'text',
+        'not null' => FALSE,
+        'size' => 'big',
+        'serialize' => TRUE,
+        'description' => 'A serialized array of additional data related to this course type.',
+      ),
+      'status' => array(
+        'type' => 'int',
+        'size' => 'tiny',
+        'description' => 'The exportable status of the entity.',
+      ),
+      'module' => array(
+        'description' => 'The name of the providing module if the entity has been defined in code.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+      ),
+    ),
+    'primary key' => array('id'),
+    'unique keys' => array(
+      'type' => array('type'),
+    ),
+  );
+  return $schema;
+}
