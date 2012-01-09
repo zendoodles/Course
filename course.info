@@ -6,7 +6,9 @@ dependencies[] = entity
 
 files[] = course.module
 files[] = course.install
-files[] = includes/course.class.php
+files[] = includes/Course.php
+files[] = includes/course.admin.inc
+files[] = includes/course.entity.inc
 files[] = tests/course.test
 
 configure = admin/config/course

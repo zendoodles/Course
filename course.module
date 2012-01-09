@@ -1,8 +1,16 @@
 <?php
+
 /**
  * @file course.module
  * A module that provides course entities for a Drupal based learning management system.
  */
+
+/**
+ * Load includes. 
+ */
+require_once dirname(__FILE__) . '/includes/Course.php';
+require_once dirname(__FILE__) . '/includes/course.admin.inc';
+require_once dirname(__FILE__) . '/includes/course.entity.inc';
 
 /**
  * Implements hook_help().
