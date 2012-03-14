@@ -129,7 +129,7 @@ function course_entity_info() {
     // Enable the entity API's admin UI.
     'admin ui' => array(
       'path' => 'admin/structure/courses',
-      'file' => 'course.admin.inc',
+      'file' => 'includes/course.admin.inc',
       'controller class' => 'courseTypeUIController',
     ),
   );
